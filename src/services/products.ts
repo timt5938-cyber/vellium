@@ -15,7 +15,7 @@ type DetectorType = {
   getSupportedFormats(): Promise<string[]>;
 };
 
-export async function scanBarcode(file: File): Promise<string> {
+export async function scanBarcodes(file: File): Promise<string[]> {
   const Detector = (window as unknown as { BarcodeDetector?: DetectorType }).BarcodeDetector;
   if (!Detector) throw new Error('В этом браузере сканирование недоступно. Введите цифры с упаковки.');
   if (file.size > 10_000_000) throw new Error('Выберите фото упаковки до 10 МБ.');
@@ -28,7 +28,7 @@ export async function scanBarcode(file: File): Promise<string> {
     if (image.width * image.height > 16_000_000) throw new Error('Слишком большое фото упаковки.');
     const found = await new Detector({ formats }).detect(image);
     if (!found.length) throw new Error('Код на фото не найден. Попробуйте приблизить его или введите вручную.');
-    return found[0].rawValue;
+    return [...new Set(found.map((item) => item.rawValue.trim()).filter(Boolean))].slice(0, 8);
   } finally {
     image.close();
   }

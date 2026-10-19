@@ -20,6 +20,7 @@ product_limiter = HourlyLimiter(limit=30)
 
 class TextRequest(BaseModel):
     text: str = Field(min_length=3, max_length=500)
+    product_hint: str = Field(default='', max_length=1200)
 
 
 @app.get('/api/health')
@@ -59,7 +60,7 @@ def check_limit(user_id: str):
 @app.post('/api/recognize/photo', response_model=RecognitionResult)
 async def recognize_photo(file: UploadFile = File(...), description: str = Form(''),
                           product_hint: str = Form(''), user_id: str = Depends(verified_user)):
-    if len(description) > 500 or len(product_hint) > 250:
+    if len(description) > 500 or len(product_hint) > 1200:
         raise HTTPException(status_code=422, detail='Описание слишком длинное.')
     if file.content_type not in {'image/jpeg', 'image/png', 'image/webp'}:
         raise HTTPException(status_code=415, detail='Нужен JPEG, PNG или WebP.')
@@ -83,7 +84,7 @@ async def recognize_photo(file: UploadFile = File(...), description: str = Form(
 async def recognize_text(payload: TextRequest, user_id: str = Depends(verified_user)):
     check_limit(user_id)
     try:
-        result = await recognize(description=payload.text)
+        result = await recognize(description=payload.text, product_hint=payload.product_hint)
     except (RuntimeError, ValidationError, genai_errors.APIError, httpx.TimeoutException) as exc:
         raise HTTPException(status_code=503, detail='Распознавание временно недоступно.') from exc
     if not result.items:

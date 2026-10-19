@@ -4,7 +4,7 @@ import { mealLabels, nutritionForGrams } from '../lib/nutrition';
 import type { Meal, MealType, Nutrition } from '../lib/nutrition';
 import { recognizeAudio, recognizePhoto, recognizeText } from '../services/recognition';
 import type { RecognitionResult } from '../services/recognition';
-import { lookupProduct, scanBarcode } from '../services/products';
+import { lookupProduct, scanBarcodes } from '../services/products';
 import type { Product } from '../services/products';
 
 type Mode = 'manual' | 'photo' | 'text' | 'voice' | 'scan' | 'review' | 'plate-review';
@@ -24,7 +24,9 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
   const [plateFile, setPlateFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
   const [barcode, setBarcode] = useState('');
+  const [scannedCodes, setScannedCodes] = useState<string[]>([]);
   const [catalogProduct, setCatalogProduct] = useState<Product | null>(null);
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [audio, setAudio] = useState<Blob | null>(null);
   const [recording, setRecording] = useState(false);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -105,52 +107,59 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
     }
   }
 
-  async function runProductLookup() {
+  async function scanFiles(files: File[]) {
+    if (!files.length) return;
     setBusy(true);
     setError('');
     try {
-      const product = await lookupProduct(barcode);
-      setFood({ ...food, name: product.name, grams: '100',
-        kcal: round(product.kcal), protein: round(product.protein),
-        fat: round(product.fat), carbs: round(product.carbs) });
-      setCatalogProduct(product);
-      setEstimate(null);
-      setMode('review');
+      let codes = [...scannedCodes];
+      const failures: string[] = [];
+      for (const file of files) {
+        try {
+          const found = await scanBarcodes(file);
+          if (!found.length) throw new Error('Код не найден');
+          const next = [...new Set([...codes, ...found])];
+          if (new Set([...next, barcode.trim()].filter(Boolean)).size > 8) {
+            throw new Error('Можно добавить до 8 разных кодов за раз.');
+          }
+          codes = next;
+        } catch (cause) {
+          failures.push(cause instanceof Error ? cause.message : 'Код не прочитан');
+        }
+      }
+      setScannedCodes(codes);
+      if (failures.length) setError(`Не удалось прочитать ${failures.length} фото: ${failures[0]}. Уже считанные коды сохранены.`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось найти продукт.');
+      setError(cause instanceof Error ? cause.message : 'Не удалось прочитать один из кодов.');
     } finally {
       setBusy(false);
     }
   }
 
-  async function scanFile(file: File | undefined) {
-    if (!file) return;
-    setError('');
-    try { setBarcode(await scanBarcode(file)); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось прочитать код.'); }
-  }
-
-  async function runCombinedRecognition() {
+  async function runCombinedRecognition(codesOnly = false) {
     setBusy(true);
     setError('');
     try {
-      const details = description.trim();
-      if (!plateFile && !barcode.trim() && details.length < 3) {
+      const details = codesOnly ? '' : description.trim();
+      const photo = codesOnly ? null : plateFile;
+      const codes = [...new Set([...scannedCodes, barcode.trim()].filter(Boolean))];
+      if (codes.length > 8) throw new Error('Можно добавить до 8 разных кодов за раз.');
+      if (!photo && !codes.length && details.length < 3) {
         throw new Error('Добавьте фото блюда, код продукта или описание еды.');
       }
-      const product = barcode.trim() ? await lookupProduct(barcode) : null;
-      const productHint = product
-        ? `${product.name}; на 100 г: ${product.kcal} ккал, Б ${product.protein} г, Ж ${product.fat} г, У ${product.carbs} г.`
-        : '';
-      const result = plateFile
-        ? await recognizePhoto(plateFile, details, productHint)
+      const products = await Promise.all(codes.map((code) => lookupProduct(code)));
+      const productHint = products.map((product, index) =>
+        `${index + 1}. ${product.name.slice(0, 70)}; на 100 г: ${product.kcal} ккал, Б ${product.protein} г, Ж ${product.fat} г, У ${product.carbs} г.`
+      ).join(' | ');
+      const result = photo
+        ? await recognizePhoto(photo, details, productHint)
         : details.length >= 3
-          ? await recognizeText(`${productHint ? `Упаковка: ${productHint}. ` : ''}${details}`.slice(0, 500))
-          : { items: [{ name: product!.name, grams: 100, kcal: product!.kcal,
-            protein: product!.protein, fat: product!.fat, carbs: product!.carbs,
-            confidence: 1, assumptions: 'Порцию 100 г измените по фактическому весу.' }],
+          ? await recognizeText(details, productHint)
+          : { items: products.map((product) => ({ name: product.name, grams: 100, kcal: product.kcal,
+            protein: product.protein, fat: product.fat, carbs: product.carbs,
+            confidence: 1, assumptions: 'Порцию 100 г измените по фактическому весу.' })),
             note: 'Данные каталога сверьте с этикеткой.' };
-      if (!result.items.length) throw new Error('Еда на снимке не найдена. Снимите тарелку при хорошем освещении.');
+      if (!result.items.length) throw new Error('Еда не найдена. Уточните описание или проверьте фото.');
       const gramsTotal = result.items.reduce((sum, item) => sum + item.grams, 0);
       if (!gramsTotal || gramsTotal > 3000) throw new Error('Проверьте размер порции вручную.');
       const items = result.items.map((item) => ({
@@ -163,6 +172,7 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
       }));
       setPlateItems(items);
       setEstimate(result);
+      setCatalogProducts(products);
       setMode('plate-review');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось распознать тарелку.');
@@ -246,17 +256,19 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
       {mode === 'scan' && <form className="recognition-form" onSubmit={(event) => { event.preventDefault(); void runCombinedRecognition(); }}>
         <div className="scan-choice"><strong>Фото, код и описание</strong><p>Можно использовать всё вместе или только нужные способы. Подробности помогут точнее определить блюдо.</p></div>
         <label>Фото блюда или тарелки<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={busy} onChange={(event) => setPlateFile(event.target.files?.[0] ?? null)}/></label>
-        <label>Фото штрихкода<input type="file" accept="image/*" capture="environment" onChange={(event) => void scanFile(event.target.files?.[0])}/></label>
+        <label>Фото кодов с упаковок<input type="file" accept="image/*" capture="environment" multiple disabled={busy} onChange={(event) => { const files = [...(event.currentTarget.files ?? [])]; event.currentTarget.value = ''; void scanFiles(files); }}/></label>
+        {scannedCodes.length > 0 && <div className="scanned-codes" aria-label="Считанные коды"><strong>Считано кодов: {scannedCodes.length}</strong>{scannedCodes.map((code) => <div key={code}><span>{code}</span><button type="button" disabled={busy} aria-label={`Убрать код ${code}`} onClick={() => setScannedCodes((old) => old.filter((item) => item !== code))}><X size={16}/></button></div>)}</div>}
         <label>Код с упаковки <small>необязательно</small><input value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Например, 3017620422003" maxLength={80}/></label>
         <label>Описание блюда — допишите и исправьте детали<textarea value={description} maxLength={500} onChange={(event) => setDescription(event.target.value)} placeholder="Например: гречка 150 г, курица без кожи, две ложки соуса"/></label>
         <p className="form-help">Код ищем в Open Food Facts; данные каталога проверьте по этикетке. Фото и текст отправляются в Gemini и не сохраняются в дневнике.</p>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="button button-primary modal-submit" type="submit" disabled={busy}>{busy ? 'Распознаём…' : 'Распознать по всем данным'} <ArrowRight size={18}/></button>
-        <button className="scan-only-button" type="button" disabled={busy || !barcode.trim()} onClick={() => void runProductLookup()}>Найти только продукт по коду</button>
+        <button className="scan-only-button" type="button" disabled={busy || (!barcode.trim() && !scannedCodes.length)} onClick={() => void runCombinedRecognition(true)}>Найти продукты только по кодам</button>
       </form>}
 
       {mode === 'plate-review' && <form onSubmit={savePlate} className="plate-review">
         <div className="recognition-review"><strong>Проверьте состав тарелки и порции</strong><p>По одному снимку вес определяется приблизительно. Исправьте значения или уберите лишнее.</p>{estimate?.note && <small>{estimate.note}</small>}</div>
+        {catalogProducts.length > 0 && <div className="catalog-sources"><strong>Источники данных с упаковок</strong>{catalogProducts.map((product) => <a key={product.barcode} href={product.source_url} target="_blank" rel="noreferrer">{product.name} ↗</a>)}</div>}
         <label>Уточните описание и повторите распознавание<textarea value={description} maxLength={500} onChange={(event) => setDescription(event.target.value)} placeholder="Допишите ингредиенты, способ приготовления и порцию"/></label>
         <button className="scan-only-button" type="button" disabled={busy} onClick={() => void runCombinedRecognition()}>Распознать ещё раз с уточнением</button>
         <label>Приём пищи<select value={food.type} onChange={(event) => { const type = event.target.value as MealType; setFood({ ...food, type }); setPlateItems((items) => items.map((item) => ({ ...item, type }))); }}>{Object.entries(mealLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>

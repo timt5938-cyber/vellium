@@ -77,12 +77,12 @@ export async function recognizePhoto(file: File, description = '', productHint =
   const body = new FormData();
   body.append('file', await compressPhoto(file), 'meal.jpg');
   if (description) body.append('description', description.slice(0, 500));
-  if (productHint) body.append('product_hint', productHint.slice(0, 250));
+  if (productHint) body.append('product_hint', productHint.slice(0, 1200));
   return callApi('/api/recognize/photo', body);
 }
 
-export async function recognizeText(text: string) {
-  return callApi('/api/recognize/text', JSON.stringify({ text }), 'application/json');
+export async function recognizeText(text: string, productHint = '') {
+  return callApi('/api/recognize/text', JSON.stringify({ text, product_hint: productHint.slice(0, 1200) }), 'application/json');
 }
 
 export async function recognizeAudio(audio: Blob) {
