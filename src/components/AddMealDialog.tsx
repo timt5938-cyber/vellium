@@ -217,8 +217,11 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
         per100.protein + per100.fat + per100.carbs > 110) {
         setError('Проверьте название, вес и БЖУ каждого продукта.'); return;
       }
+      const catalog = catalogProducts.find((product) => product.name === item.name);
       meals.push({ id: crypto.randomUUID(), name: item.name.trim(), grams, type: item.type,
-        eatenAt, ...nutritionForGrams(per100, grams) });
+        eatenAt, ...nutritionForGrams(per100, grams), source: catalog ? 'catalog' : 'photo_ai',
+        sourceDetail: catalog ? 'Пищевая ценность из Open Food Facts; порция проверена пользователем.' : `Оценка ИИ: предполагаемый вес ${grams} г. ${estimate?.note ?? ''}`,
+        sourceUrl: catalog?.source_url });
     }
     setBusy(true);
     setError('');
@@ -249,6 +252,9 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
       id: crypto.randomUUID(), name: food.name.trim(), grams, type: food.type,
       eatenAt: new Date(`${date}T${new Date().toTimeString().slice(0, 8)}`).toISOString(),
       ...nutritionForGrams(per100, grams),
+      source: mode === 'manual' ? 'manual' : catalogProduct ? 'catalog' : file ? 'photo_ai' : audio ? 'voice_ai' : 'text_ai',
+      sourceDetail: mode === 'manual' ? 'Пищевая ценность введена пользователем.' : catalogProduct ? 'Данные Open Food Facts; порция проверена пользователем.' : `Оценка ИИ: предполагаемый вес ${grams} г. ${estimate?.note ?? ''}`,
+      sourceUrl: mode === 'manual' ? undefined : catalogProduct?.source_url,
     };
     setBusy(true);
     setError('');

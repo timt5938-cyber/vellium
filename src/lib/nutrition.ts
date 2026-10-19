@@ -26,6 +26,9 @@ export interface Meal extends Nutrition {
   grams: number;
   type: MealType;
   eatenAt: string;
+  source?: 'legacy' | 'manual' | 'photo_ai' | 'text_ai' | 'voice_ai' | 'catalog' | 'repeat' | 'recipe' | 'offline';
+  sourceDetail?: string;
+  sourceUrl?: string;
 }
 
 export interface Targets extends Nutrition {

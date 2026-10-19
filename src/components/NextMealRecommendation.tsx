@@ -11,7 +11,9 @@ export default function NextMealRecommendation({ target, meals }: { target: Targ
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const eaten = totals(meals);
-  const fallback = suggestMeal(target, eaten);
+  const suggested = suggestMeal(target, eaten);
+  const excluded = avoid.toLocaleLowerCase('ru-RU').split(/[,;\s]+/).filter((word) => word.length >= 3);
+  const fallback = suggested && !excluded.some((word) => suggested.name.toLocaleLowerCase('ru-RU').includes(word.slice(0, 3))) ? suggested : null;
   const left = Math.max(0, target.kcal - eaten.kcal);
   const mealKey = meals.map((meal) => `${meal.id}:${meal.kcal}:${meal.protein}:${meal.fat}:${meal.carbs}`).join('|');
 
@@ -21,7 +23,7 @@ export default function NextMealRecommendation({ target, meals }: { target: Targ
     setLoading(true);
     setError('');
     try { setSuggestion(await recommendMeal(target, meals, avoid.trim())); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось подобрать блюдо.'); }
+    catch { setError(fallback ? 'ИИ сейчас недоступен. Показан пример по вашим сохранённым КБЖУ; проверьте порцию и состав самостоятельно.' : 'ИИ сейчас недоступен. Безопасную подсказку с указанными исключениями подобрать не удалось. Добавьте еду вручную.'); }
     finally { setLoading(false); }
   }
 

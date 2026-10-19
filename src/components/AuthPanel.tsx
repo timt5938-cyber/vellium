@@ -3,7 +3,7 @@ import { ArrowRight, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 
-export default function AuthPanel() {
+export default function AuthPanel({ redirectTo = '/app' }: { redirectTo?: string }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,7 +23,7 @@ export default function AuthPanel() {
     setNotice('');
     const result = mode === 'signup'
       ? await supabase.auth.signUp({ email: email.trim(), password, options: {
-        emailRedirectTo: window.location.origin + '/app',
+        emailRedirectTo: window.location.origin + redirectTo,
         data: { legal_version: '2026-10-19', legal_accepted_at: new Date().toISOString(), cross_border_consent_at: new Date().toISOString() },
       } })
       : await supabase.auth.signInWithPassword({ email: email.trim(), password });

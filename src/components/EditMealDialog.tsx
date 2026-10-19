@@ -37,6 +37,7 @@ export default function EditMealDialog({ meal, onClose, onSave }: {
     <div className="meal-modal" role="dialog" aria-modal="true" aria-labelledby="edit-meal-title">
       <div className="modal-head"><div><span className="section-kicker">ЗАПИСЬ ДНЕВНИКА</span><h2 id="edit-meal-title">Изменить еду</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}><X size={22}/></button></div>
       <form onSubmit={(event) => void submit(event)}>
+        <div className="meal-source"><strong>Откуда взят расчёт</strong><p>{meal.source === 'catalog' ? 'Каталог Open Food Facts' : meal.source?.includes('ai') ? 'Оценка ИИ' : meal.source === 'recipe' ? 'Свой рецепт' : meal.source === 'repeat' ? 'Повторённая запись' : 'Данные пользователя'} · порция {meal.grams} г. {meal.sourceDetail}</p>{meal.sourceUrl && <a href={meal.sourceUrl} target="_blank" rel="noreferrer">Открыть источник ↗</a>}</div>
         <label>Название блюда или продукта<input autoFocus required maxLength={160} value={name} onChange={(event) => setName(event.target.value)}/></label>
         <div className="form-grid"><label>Приём пищи<select value={type} onChange={(event) => setType(event.target.value as MealType)}>{Object.entries(mealLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><label>Порция, г<input required type="number" min="1" max="3000" step=".1" value={grams} onChange={(event) => setGrams(event.target.value)}/></label></div>
         <div className="form-divider">ПИЩЕВАЯ ЦЕННОСТЬ НА 100 Г</div>

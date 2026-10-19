@@ -11,3 +11,4 @@ backend/.venv/
 backend/.server.env
 *.tsbuildinfo
 deploy/*.png
+supabase/.temp/
