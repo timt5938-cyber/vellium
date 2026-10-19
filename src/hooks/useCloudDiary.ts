@@ -230,7 +230,7 @@ export function useCloudDiary() {
     }));
     const { error: saveError } = await supabase.from('meal_entries').insert(rows);
     if (saveError) {
-      if (navigator.onLine && !/fetch|network|timeout|connect/i.test(saveError.message)) throw saveError;
+      if (!/fetch|network|timeout|connect|offline/i.test(saveError.message)) throw saveError;
       const key = `vellium:queue:${user.id}`;
       const queued = JSON.parse(localStorage.getItem(key) ?? '[]') as FamilyMeal[];
       const staged = meals.map((meal) => ({ ...meal, profileId }));

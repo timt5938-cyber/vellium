@@ -24,7 +24,7 @@ export default function AuthPanel({ redirectTo = '/app' }: { redirectTo?: string
     const result = mode === 'signup'
       ? await supabase.auth.signUp({ email: email.trim(), password, options: {
         emailRedirectTo: window.location.origin + redirectTo,
-        data: { legal_version: '2026-10-19', legal_accepted_at: new Date().toISOString(), cross_border_consent_at: new Date().toISOString() },
+        data: { legal_version: '2026-10-20', legal_accepted_at: new Date().toISOString(), cross_border_consent_at: new Date().toISOString() },
       } })
       : await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
