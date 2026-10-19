@@ -7,19 +7,21 @@ import type { RecognitionResult } from '../services/recognition';
 import { lookupProduct, scanBarcode } from '../services/products';
 import type { Product } from '../services/products';
 
-type Mode = 'manual' | 'photo' | 'text' | 'voice' | 'scan' | 'review';
+type Mode = 'manual' | 'photo' | 'text' | 'voice' | 'scan' | 'review' | 'plate-review';
 type FoodDraft = { name: string; grams: string; kcal: string; protein: string; fat: string; carbs: string; type: MealType };
 const emptyFood: FoodDraft = { name: '', grams: '150', kcal: '', protein: '', fat: '', carbs: '', type: 'lunch' };
 const round = (value: number) => String(Math.round(value * 10) / 10);
 
-export default function AddMealDialog({ date, onClose, onSave }: {
+export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
   date: string;
   onClose: () => void;
   onSave: (meal: Meal) => Promise<void>;
+  onSaveMany: (meals: Meal[]) => Promise<void>;
 }) {
   const [mode, setMode] = useState<Mode>('manual');
   const [food, setFood] = useState<FoodDraft>(emptyFood);
   const [file, setFile] = useState<File | null>(null);
+  const [plateFile, setPlateFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
   const [barcode, setBarcode] = useState('');
   const [catalogProduct, setCatalogProduct] = useState<Product | null>(null);
@@ -29,6 +31,7 @@ export default function AddMealDialog({ date, onClose, onSave }: {
   const stream = useRef<MediaStream | null>(null);
   const stopTimer = useRef<number | null>(null);
   const [estimate, setEstimate] = useState<RecognitionResult | null>(null);
+  const [plateItems, setPlateItems] = useState<FoodDraft[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -102,8 +105,7 @@ export default function AddMealDialog({ date, onClose, onSave }: {
     }
   }
 
-  async function runProductLookup(event: React.FormEvent) {
-    event.preventDefault();
+  async function runProductLookup() {
     setBusy(true);
     setError('');
     try {
@@ -126,6 +128,73 @@ export default function AddMealDialog({ date, onClose, onSave }: {
     setError('');
     try { setBarcode(await scanBarcode(file)); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось прочитать код.'); }
+  }
+
+  async function runCombinedRecognition() {
+    setBusy(true);
+    setError('');
+    try {
+      const details = description.trim();
+      if (!plateFile && !barcode.trim() && details.length < 3) {
+        throw new Error('Добавьте фото блюда, код продукта или описание еды.');
+      }
+      const product = barcode.trim() ? await lookupProduct(barcode) : null;
+      const productHint = product
+        ? `${product.name}; на 100 г: ${product.kcal} ккал, Б ${product.protein} г, Ж ${product.fat} г, У ${product.carbs} г.`
+        : '';
+      const result = plateFile
+        ? await recognizePhoto(plateFile, details, productHint)
+        : details.length >= 3
+          ? await recognizeText(`${productHint ? `Упаковка: ${productHint}. ` : ''}${details}`.slice(0, 500))
+          : { items: [{ name: product!.name, grams: 100, kcal: product!.kcal,
+            protein: product!.protein, fat: product!.fat, carbs: product!.carbs,
+            confidence: 1, assumptions: 'Порцию 100 г измените по фактическому весу.' }],
+            note: 'Данные каталога сверьте с этикеткой.' };
+      if (!result.items.length) throw new Error('Еда на снимке не найдена. Снимите тарелку при хорошем освещении.');
+      const gramsTotal = result.items.reduce((sum, item) => sum + item.grams, 0);
+      if (!gramsTotal || gramsTotal > 3000) throw new Error('Проверьте размер порции вручную.');
+      const items = result.items.map((item) => ({
+        name: item.name.slice(0, 160), grams: round(item.grams),
+        kcal: item.grams > 0 ? round(item.kcal * 100 / item.grams) : '',
+        protein: item.grams > 0 ? round(item.protein * 100 / item.grams) : '',
+        fat: item.grams > 0 ? round(item.fat * 100 / item.grams) : '',
+        carbs: item.grams > 0 ? round(item.carbs * 100 / item.grams) : '',
+        type: food.type,
+      }));
+      setPlateItems(items);
+      setEstimate(result);
+      setMode('plate-review');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось распознать тарелку.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function savePlate(event: React.FormEvent) {
+    event.preventDefault();
+    const gramsTotal = plateItems.reduce((sum, item) => sum + Number(item.grams), 0);
+    if (!plateItems.length || !Number.isFinite(gramsTotal) || gramsTotal > 3000) {
+      setError('Проверьте список продуктов и общий вес порции до 3000 г.'); return;
+    }
+    const eatenAt = new Date(`${date}T${new Date().toTimeString().slice(0, 8)}`).toISOString();
+    const meals: Meal[] = [];
+    for (const item of plateItems) {
+      const grams = Number(item.grams);
+      const per100 = { kcal: Number(item.kcal), protein: Number(item.protein), fat: Number(item.fat), carbs: Number(item.carbs) };
+      if (!item.name.trim() || !Number.isFinite(grams) || grams <= 0 ||
+        Object.values(per100).some((value) => !Number.isFinite(value) || value < 0 || value > 1000) ||
+        per100.protein + per100.fat + per100.carbs > 110) {
+        setError('Проверьте название, вес и БЖУ каждого продукта.'); return;
+      }
+      meals.push({ id: crypto.randomUUID(), name: item.name.trim(), grams, type: item.type,
+        eatenAt, ...nutritionForGrams(per100, grams) });
+    }
+    setBusy(true);
+    setError('');
+    try { await onSaveMany(meals); onClose(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось сохранить продукты.'); }
+    finally { setBusy(false); }
   }
 
   async function save(event: React.FormEvent) {
@@ -166,20 +235,40 @@ export default function AddMealDialog({ date, onClose, onSave }: {
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <div className="meal-modal" role="dialog" aria-modal="true" aria-labelledby="add-title">
       <div className="modal-head"><div><span className="section-kicker">НОВАЯ ЗАПИСЬ</span><h2 id="add-title">Добавить еду</h2></div><button aria-label="Закрыть" onClick={onClose}><X size={22}/></button></div>
-      {mode !== 'review' && <div className="entry-modes" role="tablist" aria-label="Способ добавления">
+      {mode !== 'review' && mode !== 'plate-review' && <div className="entry-modes" role="tablist" aria-label="Способ добавления">
         <button type="button" role="tab" disabled={recording} aria-selected={mode === 'manual'} className={mode === 'manual' ? 'active' : ''} onClick={() => { setMode('manual'); setError(''); }}><PenLine size={16}/> Вручную</button>
         <button type="button" role="tab" disabled={recording} aria-selected={mode === 'photo'} className={mode === 'photo' ? 'active' : ''} onClick={() => { setMode('photo'); setError(''); }}><Camera size={16}/> Фото</button>
         <button type="button" role="tab" disabled={recording} aria-selected={mode === 'text'} className={mode === 'text' ? 'active' : ''} onClick={() => { setMode('text'); setError(''); }}><Type size={16}/> Текст</button>
         <button type="button" role="tab" aria-selected={mode === 'voice'} className={mode === 'voice' ? 'active' : ''} onClick={() => { setMode('voice'); setError(''); }}><Mic size={16}/> Голос</button>
-        <button type="button" role="tab" disabled={recording} aria-selected={mode === 'scan'} className={mode === 'scan' ? 'active' : ''} onClick={() => { setMode('scan'); setError(''); }}><ScanLine size={16}/> Код</button>
+        <button type="button" role="tab" disabled={recording} aria-selected={mode === 'scan'} className={mode === 'scan' ? 'active' : ''} onClick={() => { setMode('scan'); setError(''); }}><ScanLine size={16}/> Вместе</button>
       </div>}
 
-      {mode === 'scan' && <form className="recognition-form" onSubmit={runProductLookup}>
+      {mode === 'scan' && <form className="recognition-form" onSubmit={(event) => { event.preventDefault(); void runCombinedRecognition(); }}>
+        <div className="scan-choice"><strong>Фото, код и описание</strong><p>Можно использовать всё вместе или только нужные способы. Подробности помогут точнее определить блюдо.</p></div>
+        <label>Фото блюда или тарелки<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={busy} onChange={(event) => setPlateFile(event.target.files?.[0] ?? null)}/></label>
         <label>Фото штрихкода<input type="file" accept="image/*" capture="environment" onChange={(event) => void scanFile(event.target.files?.[0])}/></label>
-        <label>Или цифры под штрихкодом<input value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Например, 3017620422003" required maxLength={80}/></label>
-        <p className="form-help">Поиск в Open Food Facts. Сканирование фото зависит от браузера; данные каталога могут отличаться от этикетки.</p>
+        <label>Код с упаковки <small>необязательно</small><input value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Например, 3017620422003" maxLength={80}/></label>
+        <label>Описание блюда — допишите и исправьте детали<textarea value={description} maxLength={500} onChange={(event) => setDescription(event.target.value)} placeholder="Например: гречка 150 г, курица без кожи, две ложки соуса"/></label>
+        <p className="form-help">Код ищем в Open Food Facts; данные каталога проверьте по этикетке. Фото и текст отправляются в Gemini и не сохраняются в дневнике.</p>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <button className="button button-primary modal-submit" type="submit" disabled={busy}>{busy ? 'Ищем…' : 'Найти продукт'} <ArrowRight size={18}/></button>
+        <button className="button button-primary modal-submit" type="submit" disabled={busy}>{busy ? 'Распознаём…' : 'Распознать по всем данным'} <ArrowRight size={18}/></button>
+        <button className="scan-only-button" type="button" disabled={busy || !barcode.trim()} onClick={() => void runProductLookup()}>Найти только продукт по коду</button>
+      </form>}
+
+      {mode === 'plate-review' && <form onSubmit={savePlate} className="plate-review">
+        <div className="recognition-review"><strong>Проверьте состав тарелки и порции</strong><p>По одному снимку вес определяется приблизительно. Исправьте значения или уберите лишнее.</p>{estimate?.note && <small>{estimate.note}</small>}</div>
+        <label>Уточните описание и повторите распознавание<textarea value={description} maxLength={500} onChange={(event) => setDescription(event.target.value)} placeholder="Допишите ингредиенты, способ приготовления и порцию"/></label>
+        <button className="scan-only-button" type="button" disabled={busy} onClick={() => void runCombinedRecognition()}>Распознать ещё раз с уточнением</button>
+        <label>Приём пищи<select value={food.type} onChange={(event) => { const type = event.target.value as MealType; setFood({ ...food, type }); setPlateItems((items) => items.map((item) => ({ ...item, type }))); }}>{Object.entries(mealLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        {plateItems.map((item, index) => <div className="plate-item" key={index}>
+          <div className="plate-item-head"><strong>Продукт {index + 1}</strong><button type="button" aria-label={`Убрать ${item.name}`} onClick={() => setPlateItems((items) => items.filter((_, i) => i !== index))}><X size={17}/> Убрать</button></div>
+          <label>Название<input required maxLength={160} value={item.name} onChange={(event) => setPlateItems((items) => items.map((old, i) => i === index ? { ...old, name: event.target.value } : old))}/></label>
+          <div className="form-grid"><label>Порция, г<input type="number" required min="1" max="3000" step=".1" value={item.grams} onChange={(event) => setPlateItems((items) => items.map((old, i) => i === index ? { ...old, grams: event.target.value } : old))}/></label><span className="plate-kcal">≈ {Math.round(Number(item.kcal) * Number(item.grams) / 100)} ккал</span></div>
+          <details><summary>Пищевая ценность на 100 г</summary><div className="form-grid">{(['kcal', 'protein', 'fat', 'carbs'] as const).map((key) => <label key={key}>{({ kcal: 'Ккал', protein: 'Белки, г', fat: 'Жиры, г', carbs: 'Углеводы, г' })[key]}<input type="number" required min="0" max="1000" step=".1" value={item[key]} onChange={(event) => setPlateItems((items) => items.map((old, i) => i === index ? { ...old, [key]: event.target.value } : old))}/></label>)}</div></details>
+          {estimate?.items[index]?.assumptions && <small>{estimate.items[index].assumptions}</small>}
+        </div>)}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <button type="submit" className="button button-primary modal-submit" disabled={busy || !plateItems.length}>{busy ? 'Сохраняем…' : `Подтвердить и сохранить ${plateItems.length} продукта`}</button>
       </form>}
 
       {(mode === 'photo' || mode === 'text' || mode === 'voice') && <form onSubmit={runRecognition} className="recognition-form">

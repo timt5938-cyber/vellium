@@ -66,6 +66,29 @@ def test_photo_requires_login_and_returns_only_editable_estimate(monkeypatch):
         app.dependency_overrides.clear()
 
 
+def test_photo_combines_editable_description_and_product_hint(monkeypatch):
+    received = {}
+
+    async def fake_recognize(**kwargs):
+        received.update(kwargs)
+        return RecognitionResult(items=[
+            FoodEstimate(name='Гречка', grams=150, kcal=165, protein=6,
+                         fat=2, carbs=30, confidence=.7, assumptions='Оценка по фото')
+        ], note='Проверить вес')
+
+    monkeypatch.setattr('app.main.recognize', fake_recognize)
+    app.dependency_overrides[verified_user] = lambda: 'test-user'
+    try:
+        response = TestClient(app).post('/api/recognize/photo',
+            files={'file': ('meal.jpg', image_bytes(), 'image/jpeg')},
+            data={'description': '  Гречка без масла  ', 'product_hint': 'Упаковка: гречка'})
+        assert response.status_code == 200
+        assert received['description'] == 'Гречка без масла'
+        assert received['product_hint'] == 'Упаковка: гречка'
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_audio_requires_login_and_rejects_invalid_upload(monkeypatch):
     async def fake_recognize(**_kwargs):
         return RecognitionResult(items=[

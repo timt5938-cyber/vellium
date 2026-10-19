@@ -73,9 +73,11 @@ async function callApi(path: string, body: BodyInit, contentType?: string): Prom
   }
 }
 
-export async function recognizePhoto(file: File) {
+export async function recognizePhoto(file: File, description = '', productHint = '') {
   const body = new FormData();
   body.append('file', await compressPhoto(file), 'meal.jpg');
+  if (description) body.append('description', description.slice(0, 500));
+  if (productHint) body.append('product_hint', productHint.slice(0, 250));
   return callApi('/api/recognize/photo', body);
 }
 

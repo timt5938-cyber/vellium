@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import type { Meal, Profile } from '../lib/nutrition';
 import { supabase } from '../services/supabase';
 
-type FamilyProfile = { id: string; profile: Profile };
+type FamilyProfile = { id: string; ownerUserId: string; memberUserId: string | null; profile: Profile };
 type FamilyMeal = Meal & { profileId: string };
 
 function message(error: unknown) {
@@ -48,9 +49,18 @@ export function useCloudDiary() {
     let active = true;
     const client = supabase;
     async function load() {
+      if (user!.email) {
+        const pending = await client.from('family_invitations').select('id')
+          .eq('email', user!.email.toLowerCase()).eq('status', 'pending');
+        if (pending.error) { setError(message(pending.error)); setLoaded(true); return; }
+        for (const invite of pending.data ?? []) {
+          const accepted = await client.from('family_invitations').update({ status: 'accepted' }).eq('id', invite.id);
+          if (accepted.error) setError(message(accepted.error));
+        }
+      }
       const [profileResult, meals] = await Promise.all([
-        client.from('nutrition_profiles').select('*').eq('owner_user_id', user!.id).order('created_at'),
-        client.from('meal_entries').select('*').eq('owner_user_id', user!.id).order('eaten_at', { ascending: false }),
+        client.from('nutrition_profiles').select('*').order('created_at'),
+        client.from('meal_entries').select('*').order('eaten_at', { ascending: false }),
       ]);
       if (!active) return;
       if (profileResult.error || meals.error) {
@@ -58,6 +68,7 @@ export function useCloudDiary() {
       } else {
         const family: FamilyProfile[] = (profileResult.data ?? []).map((row) => ({
           id: row.id,
+          ownerUserId: row.owner_user_id, memberUserId: row.member_user_id,
           profile: {
             name: row.name, sex: row.sex, birthDate: row.birth_date,
             heightCm: Number(row.height_cm), weightKg: Number(row.weight_kg),
@@ -92,36 +103,68 @@ export function useCloudDiary() {
   async function saveProfile(profile: Profile) {
     if (!supabase || !user) throw new Error('Войдите в аккаунт.');
     const id = profileId ?? crypto.randomUUID();
-    const { error: saveError } = await supabase.from('nutrition_profiles').upsert({
-      id, owner_user_id: user.id, name: profile.name, sex: profile.sex,
+    const current = profiles.find((item) => item.id === id);
+    const fields = {
+      name: profile.name, sex: profile.sex,
       birth_date: profile.birthDate, height_cm: profile.heightCm, weight_kg: profile.weightKg,
       activity: profile.activity, goal: profile.goal, manual_target: profile.manualTarget ?? null,
       updated_at: new Date().toISOString(),
-    });
+    };
+    const { error: saveError } = current
+      ? await supabase.from('nutrition_profiles').update(fields).eq('id', id)
+      : await supabase.from('nutrition_profiles').insert({ id, owner_user_id: user.id, ...fields });
     if (saveError) throw saveError;
     setProfiles((old) => old.some((item) => item.id === id)
-      ? old.map((item) => item.id === id ? { id, profile } : item)
-      : [...old, { id, profile }]);
+      ? old.map((item) => item.id === id ? { ...item, profile } : item)
+      : [...old, { id, ownerUserId: user.id, memberUserId: null, profile }]);
     setProfileId(id);
     localStorage.setItem(`vellium:profile:${user.id}`, id);
+    return id;
   }
 
-  async function addMeal(meal: Meal) {
-    if (!supabase || !user || !profileId) throw new Error('Сначала сохраните профиль.');
-    const { error: saveError } = await supabase.from('meal_entries').insert({
-      id: meal.id, owner_user_id: user.id, profile_id: profileId,
-      name: meal.name, meal_type: meal.type, grams: meal.grams,
-      kcal: meal.kcal, protein: meal.protein, fat: meal.fat, carbs: meal.carbs,
-      eaten_at: meal.eatenAt,
+  async function inviteAdult(id: string, email: string) {
+    if (!supabase || !user) throw new Error('Войдите в аккаунт.');
+    const normalized = email.trim().toLowerCase();
+    if (!normalized || normalized === user.email?.toLowerCase()) throw new Error('Укажите почту другого взрослого.');
+    const selected = await supabase.from('nutrition_profiles').select('owner_user_id,member_user_id').eq('id', id).single();
+    if (selected.error || selected.data.owner_user_id !== user.id || selected.data.member_user_id) throw new Error('Этот профиль нельзя пригласить.');
+    const existing = await supabase.from('family_invitations').select('id').eq('profile_id', id).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (existing.data) {
+      const removed = await supabase.from('family_invitations').delete().eq('id', existing.data.id);
+      if (removed.error) throw removed.error;
+    }
+    const inserted = await supabase.from('family_invitations').insert({ profile_id: id, owner_user_id: user.id, email: normalized });
+    if (inserted.error) throw inserted.error;
+    const temporary = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
-    if (saveError) throw saveError;
-    setAllMeals((old) => [...old, { ...meal, profileId }]);
+    const sent = await temporary.auth.signInWithOtp({ email: normalized, options: {
+      emailRedirectTo: window.location.origin + '/app', shouldCreateUser: true,
+    } });
+    if (sent.error) throw new Error(`Профиль сохранён, но письмо не отправлено: ${sent.error.message}`);
   }
+
+  async function addMeals(meals: Meal[]) {
+    if (!supabase || !user || !profileId) throw new Error('Сначала сохраните профиль.');
+    const profile = profiles.find((item) => item.id === profileId);
+    if (!profile || !meals.length) throw new Error('Выберите профиль и продукты.');
+    const rows = meals.map((meal) => ({
+      id: meal.id, owner_user_id: profile.ownerUserId, profile_id: profileId,
+      name: meal.name, meal_type: meal.type, grams: meal.grams,
+      kcal: meal.kcal, protein: meal.protein, fat: meal.fat, carbs: meal.carbs, eaten_at: meal.eatenAt,
+    }));
+    const { error: saveError } = await supabase.from('meal_entries').insert(rows);
+    if (saveError) throw saveError;
+    setAllMeals((old) => [...old, ...meals.map((meal) => ({ ...meal, profileId }))]);
+  }
+
+  async function addMeal(meal: Meal) { await addMeals([meal]); }
 
   async function removeMeal(id: string) {
     if (!supabase || !user || !profileId) throw new Error('Войдите в аккаунт.');
     const { error: removeError } = await supabase.from('meal_entries').delete()
-      .eq('id', id).eq('profile_id', profileId).eq('owner_user_id', user.id);
+      .eq('id', id).eq('profile_id', profileId);
     if (removeError) throw removeError;
     setAllMeals((old) => old.filter((meal) => meal.id !== id));
   }
@@ -131,13 +174,13 @@ export function useCloudDiary() {
     const { error: removeError } = await supabase.from('nutrition_profiles').delete()
       .eq('owner_user_id', user.id);
     if (removeError) throw removeError;
-    setProfiles([]);
-    setAllMeals([]);
-    setProfileId(null);
+    setProfiles((old) => old.filter((item) => item.ownerUserId !== user.id));
+    setAllMeals((old) => old.filter((meal) => profiles.find((item) => item.id === meal.profileId)?.ownerUserId !== user.id));
+    setProfileId(profiles.find((item) => item.ownerUserId !== user.id)?.id ?? null);
     localStorage.removeItem(`vellium:profile:${user.id}`);
   }
 
   return { configured: Boolean(supabase), user, authReady, loaded, data, profiles,
     allMeals, profileId, error, setError, selectProfile, newProfile,
-    saveProfile, addMeal, removeMeal, clearData };
+    saveProfile, inviteAdult, addMeal, addMeals, removeMeal, clearData };
 }

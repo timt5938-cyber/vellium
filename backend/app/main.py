@@ -3,7 +3,7 @@ from uuid import UUID
 
 import httpx
 from google.genai import errors as genai_errors
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
@@ -57,7 +57,10 @@ def check_limit(user_id: str):
 
 
 @app.post('/api/recognize/photo', response_model=RecognitionResult)
-async def recognize_photo(file: UploadFile = File(...), user_id: str = Depends(verified_user)):
+async def recognize_photo(file: UploadFile = File(...), description: str = Form(''),
+                          product_hint: str = Form(''), user_id: str = Depends(verified_user)):
+    if len(description) > 500 or len(product_hint) > 250:
+        raise HTTPException(status_code=422, detail='Описание слишком длинное.')
     if file.content_type not in {'image/jpeg', 'image/png', 'image/webp'}:
         raise HTTPException(status_code=415, detail='Нужен JPEG, PNG или WebP.')
     raw = await file.read(5_000_001)
@@ -67,7 +70,8 @@ async def recognize_photo(file: UploadFile = File(...), user_id: str = Depends(v
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     check_limit(user_id)
     try:
-        result = await recognize(photo=clean)
+        result = await recognize(photo=clean, description=description.strip(),
+                                 product_hint=product_hint.strip())
     except (RuntimeError, ValidationError, genai_errors.APIError, httpx.TimeoutException) as exc:
         raise HTTPException(status_code=503, detail='Распознавание временно недоступно.') from exc
     if not result.items:
