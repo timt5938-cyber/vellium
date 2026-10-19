@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
+    "@types/pdfmake": "^0.2.12",
+    "exceljs": "^4.4.0",
     "lucide-react": "^0.468.0",
+    "pdfmake": "^0.2.20",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.4"

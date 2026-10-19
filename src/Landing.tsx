@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowDown, ArrowRight, Camera, ChartNoAxesCombined, Check, ChevronRight,
@@ -27,6 +27,17 @@ export default function Landing() {
   const [activeDemo, setActiveDemo] = useState<DemoKey>('diary');
   const active = demo[activeDemo];
   const ActiveIcon = active.icon;
+
+  useEffect(() => {
+    if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const sections = document.querySelectorAll('.landing .section-pad, .landing .final-cta');
+    sections.forEach((section) => section.classList.add('reveal-section'));
+    const observer = new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
+    }), { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div className="landing" id="top">
@@ -57,11 +68,11 @@ export default function Landing() {
               <div className="hero-actions"><Link className="button button-primary" to="/app">Открыть дневник <ArrowRight size={19}/></Link><a className="button button-ghost" href="#approach">Узнать больше <ArrowDown size={18}/></a></div>
               <div className="hero-note"><span className="note-icon"><Check size={14}/></span> Дневник, распознавание еды и личные профили семьи уже доступны.</div>
             </div>
-            <div className="hero-floating" aria-label="Пример интерфейса VELLIUM">
+            <Link to="/app" className="hero-floating" aria-label="Открыть дневник VELLIUM">
               <div className="floating-top"><span>ВАШ ДЕНЬ · ПРИМЕР</span><span className="floating-status"><span/> в балансе</span></div>
               <div className="floating-main"><div><span className="floating-label">Осталось на сегодня</span><strong>840 <small>ккал</small></strong></div><div className="floating-ring"><span>64%</span></div></div>
               <div className="floating-bars"><div><span>Белки</span><i><b style={{width:'68%'}} /></i></div><div><span>Жиры</span><i><b style={{width:'52%'}} /></i></div><div><span>Углеводы</span><i><b style={{width:'73%'}} /></i></div></div>
-            </div>
+            </Link>
           </div>
           <div className="hero-bottom"><div className="container"><span>ПИТАНИЕ БЕЗ ДОГАДОК</span><span className="hero-scroll">ЛИСТАЙТЕ НИЖЕ <ArrowDown size={14}/></span></div></div>
         </section>
@@ -71,7 +82,7 @@ export default function Landing() {
             <div><div className="section-kicker">01 / НОВЫЙ ВЗГЛЯД</div><h2>Данные, которые<br/><span>помогают вам.</span></h2></div>
             <div className="intro-right"><p className="large-copy">Не стремиться к идеальному дню. Замечать закономерности и принимать решения, которые подходят именно вам.</p><p>VELLIUM собирает приёмы пищи в понятную картину дня. Вы видите энергию и БЖУ без перегруженных таблиц, а записи всегда можете скорректировать.</p><a className="text-link" href="#features">Посмотреть возможности <ArrowRight size={18}/></a></div>
           </div>
-          <div className="container principle-row"><div><span>01</span><strong>Записывайте удобно</strong><p>Начните с простого ручного ввода.</p></div><div><span>02</span><strong>Видьте баланс</strong><p>Понятные ориентиры на каждый день.</p></div><div><span>03</span><strong>Выбирайте осознанно</strong><p>Идеи для следующего приёма пищи.</p></div></div>
+          <div className="container principle-row"><Link to="/app" className="principle-link"><span>01</span><strong>Записывайте удобно</strong><p>Начните с простого ручного ввода.</p></Link><Link to="/app" className="principle-link"><span>02</span><strong>Видьте баланс</strong><p>Понятные ориентиры на каждый день.</p></Link><Link to="/app" className="principle-link"><span>03</span><strong>Выбирайте осознанно</strong><p>Идеи для следующего приёма пищи.</p></Link></div>
         </section>
 
         <section className="feature-showcase section-pad" id="features">

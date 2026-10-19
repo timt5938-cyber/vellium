@@ -161,6 +161,16 @@ export function useCloudDiary() {
 
   async function addMeal(meal: Meal) { await addMeals([meal]); }
 
+  async function updateMeal(meal: Meal) {
+    if (!supabase || !user || !profileId) throw new Error('Войдите в аккаунт.');
+    const { data: updated, error: saveError } = await supabase.from('meal_entries').update({
+      name: meal.name, meal_type: meal.type, grams: meal.grams,
+      kcal: meal.kcal, protein: meal.protein, fat: meal.fat, carbs: meal.carbs,
+    }).eq('id', meal.id).eq('profile_id', profileId).select('id').single();
+    if (saveError || !updated) throw saveError ?? new Error('Запись не найдена или недоступна.');
+    setAllMeals((old) => old.map((item) => item.id === meal.id ? { ...meal, profileId } : item));
+  }
+
   async function removeMeal(id: string) {
     if (!supabase || !user || !profileId) throw new Error('Войдите в аккаунт.');
     const { error: removeError } = await supabase.from('meal_entries').delete()
@@ -182,5 +192,5 @@ export function useCloudDiary() {
 
   return { configured: Boolean(supabase), user, authReady, loaded, data, profiles,
     allMeals, profileId, error, setError, selectProfile, newProfile,
-    saveProfile, inviteAdult, addMeal, addMeals, removeMeal, clearData };
+    saveProfile, inviteAdult, addMeal, addMeals, updateMeal, removeMeal, clearData };
 }

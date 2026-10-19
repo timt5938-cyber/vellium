@@ -25,6 +25,8 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
   const [description, setDescription] = useState('');
   const [barcode, setBarcode] = useState('');
   const [scannedCodes, setScannedCodes] = useState<string[]>([]);
+  const [scannedProducts, setScannedProducts] = useState<Record<string, Product>>({});
+  const [failedCodes, setFailedCodes] = useState<Record<string, boolean>>({});
   const [catalogProduct, setCatalogProduct] = useState<Product | null>(null);
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [audio, setAudio] = useState<Blob | null>(null);
@@ -128,12 +130,30 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
         }
       }
       setScannedCodes(codes);
+      codes.filter((code) => !scannedCodes.includes(code)).forEach((code) => { void loadProduct(code); });
       if (failures.length) setError(`Не удалось прочитать ${failures.length} фото: ${failures[0]}. Уже считанные коды сохранены.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось прочитать один из кодов.');
     } finally {
       setBusy(false);
     }
+  }
+
+  async function loadProduct(code: string) {
+    try {
+      const product = await lookupProduct(code);
+      setScannedProducts((old) => ({ ...old, [code]: product }));
+    } catch (cause) { setFailedCodes((old) => ({ ...old, [code]: true })); setError(cause instanceof Error ? cause.message : 'Продукт не найден.'); }
+  }
+
+  function addTypedCode() {
+    const code = barcode.trim();
+    if (!code) return;
+    if (scannedCodes.includes(code)) { setBarcode(''); return; }
+    if (scannedCodes.length >= 8) { setError('Можно добавить до 8 разных кодов за раз.'); return; }
+    setScannedCodes((old) => [...old, code]);
+    setBarcode(''); setError('');
+    void loadProduct(code);
   }
 
   async function runCombinedRecognition(codesOnly = false) {
@@ -257,8 +277,9 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
         <div className="scan-choice"><strong>Фото, код и описание</strong><p>Можно использовать всё вместе или только нужные способы. Подробности помогут точнее определить блюдо.</p></div>
         <label>Фото блюда или тарелки<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={busy} onChange={(event) => setPlateFile(event.target.files?.[0] ?? null)}/></label>
         <label>Фото кодов с упаковок<input type="file" accept="image/*" capture="environment" multiple disabled={busy} onChange={(event) => { const files = [...(event.currentTarget.files ?? [])]; event.currentTarget.value = ''; void scanFiles(files); }}/></label>
-        {scannedCodes.length > 0 && <div className="scanned-codes" aria-label="Считанные коды"><strong>Считано кодов: {scannedCodes.length}</strong>{scannedCodes.map((code) => <div key={code}><span>{code}</span><button type="button" disabled={busy} aria-label={`Убрать код ${code}`} onClick={() => setScannedCodes((old) => old.filter((item) => item !== code))}><X size={16}/></button></div>)}</div>}
-        <label>Код с упаковки <small>необязательно</small><input value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Например, 3017620422003" maxLength={80}/></label>
+        {scannedCodes.length > 0 && <div className="scanned-codes" aria-label="Добавленные продукты"><strong>Продукты с упаковок: {scannedCodes.length}</strong>{scannedCodes.map((code) => <div key={code}><span><b>{scannedProducts[code]?.name ?? (failedCodes[code] ? 'Не найден — проверьте код' : 'Ищем продукт…')}</b><small>{code}{scannedProducts[code] && ` · ${scannedProducts[code].kcal} ккал / 100 г`}</small></span><button type="button" disabled={busy} aria-label={`Убрать код ${code}`} onClick={() => setScannedCodes((old) => old.filter((item) => item !== code))}><X size={16}/></button></div>)}</div>}
+        <label>Код с упаковки <small>необязательно</small><input value={barcode} onChange={(event) => setBarcode(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addTypedCode(); } }} placeholder="Например, 3017620422003" maxLength={80}/></label>
+        <button className="scan-only-button" type="button" disabled={busy || !barcode.trim()} onClick={addTypedCode}>Добавить продукт по коду</button>
         <label>Описание блюда — допишите и исправьте детали<textarea value={description} maxLength={500} onChange={(event) => setDescription(event.target.value)} placeholder="Например: гречка 150 г, курица без кожи, две ложки соуса"/></label>
         <p className="form-help">Код ищем в Open Food Facts; данные каталога проверьте по этикетке. Фото и текст отправляются в Gemini и не сохраняются в дневнике.</p>
         {error && <p className="form-error" role="alert">{error}</p>}

@@ -10,6 +10,8 @@ export interface Product {
   source_url: string;
 }
 
+const productCache = new Map<string, Promise<Product>>();
+
 type DetectorType = {
   new(options: { formats: string[] }): { detect(image: ImageBitmap): Promise<{ rawValue: string }[]> };
   getSupportedFormats(): Promise<string[]>;
@@ -35,10 +37,22 @@ export async function scanBarcodes(file: File): Promise<string[]> {
 }
 
 export async function lookupProduct(barcode: string): Promise<Product> {
+  const code = barcode.trim();
+  if (!code || code.length > 80) throw new Error('Проверьте код с упаковки.');
+  const cached = productCache.get(code);
+  if (cached) return cached;
+  const request = fetchProduct(code);
+  if (productCache.size >= 32) productCache.delete(productCache.keys().next().value!);
+  productCache.set(code, request);
+  request.catch(() => productCache.delete(code));
+  return request;
+}
+
+async function fetchProduct(code: string): Promise<Product> {
   if (!supabase) throw new Error('Supabase не настроен.');
   const { data } = await supabase.auth.getSession();
   if (!data.session?.access_token) throw new Error('Войдите в аккаунт.');
-  const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/products/${encodeURIComponent(barcode.trim())}`, {
+  const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/products/${encodeURIComponent(code)}`, {
     headers: { Authorization: `Bearer ${data.session.access_token}` },
   });
   const result = await response.json().catch(() => null);
