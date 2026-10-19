@@ -9,15 +9,22 @@ export default function AuthPanel() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [crossBorderConsent, setCrossBorderConsent] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!supabase) return;
+    if (mode === 'signup' && (!acceptedTerms || !crossBorderConsent)) {
+      setNotice('Для регистрации подтвердите условия и передачу данных за пределы РФ.');
+      return;
+    }
     setBusy(true);
     setNotice('');
     const result = mode === 'signup'
       ? await supabase.auth.signUp({ email: email.trim(), password, options: {
         emailRedirectTo: window.location.origin + '/app',
+        data: { legal_version: '2026-10-19', legal_accepted_at: new Date().toISOString(), cross_border_consent_at: new Date().toISOString() },
       } })
       : await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
@@ -38,6 +45,11 @@ export default function AuthPanel() {
       <form onSubmit={submit}>
         <label>Электронная почта<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com"/></label>
         <label>Пароль<input type="password" required minLength={8} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Не менее 8 символов"/></label>
+        {mode === 'signup' && <div className="auth-consents">
+          <label className="auth-check"><input type="checkbox" required checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)}/><span>Я ознакомился(лась) и принимаю <Link to="/terms" target="_blank" rel="noopener noreferrer">Пользовательское соглашение</Link> и <Link to="/privacy" target="_blank" rel="noopener noreferrer">Политику конфиденциальности</Link>.</span></label>
+          <label className="auth-check"><input type="checkbox" required checked={crossBorderConsent} onChange={(event) => setCrossBorderConsent(event.target.checked)}/><span>Я согласен(на) на передачу данных для работы сервиса в Германию (Supabase) и поставщикам функций, указанным в <Link to="/privacy" target="_blank" rel="noopener noreferrer">Политике</Link>. Понимаю, что основная база находится во Франкфурте.</span></label>
+          <p>Это согласие не заменяет требований российского закона о локализации данных. ИИ не является медицинской консультацией.</p>
+        </div>}
         {notice && <p className="form-error" role="status">{notice}</p>}
         <button className="button button-primary" type="submit" disabled={busy}>{busy ? 'Подождите…' : mode === 'login' ? 'Войти' : 'Создать аккаунт'} <ArrowRight size={18}/></button>
       </form>

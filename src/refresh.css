@@ -123,6 +123,14 @@
 .policy-provider strong { color: #e7c09b; }
 .policy-provider p { margin: 8px 0; }
 .policy-footer { border-top: 1px solid var(--line); color: #ad9b8a; font-size: 12px; }
+.policy-side-link { margin-top: 28px; }
+.policy-side-link a { color: var(--copper); display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.policy-content section:target { scroll-margin-top: 24px; }
+.auth-consents { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 9px; background: #211b17; }
+.auth-card form .auth-check { display: flex; align-items: flex-start; gap: 12px; color: #dfd0c0; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.auth-card form .auth-check input { width: 19px; height: 19px; min-width: 19px; margin: 2px 0 0; accent-color: var(--copper); }
+.auth-check a { color: #e1b38b; text-decoration: underline; text-underline-offset: 2px; }
+.auth-consents p { margin: 0; color: #b5a495; font-size: 12px; line-height: 1.55; }
 
 @media (prefers-reduced-motion: reduce) { .scan-beam { animation: none; top: 50%; } }
 @media (max-width: 1000px) { .privacy-new-grid { grid-template-columns: 1fr; gap: 45px; } .policy-layout { grid-template-columns: 1fr; gap: 45px; } .policy-intro { position: static; } }

@@ -100,7 +100,7 @@ export default function Landing() {
 
         <section className="final-cta"><div className="container final-inner"><div><div className="section-kicker">ВАШ ДЕНЬ НАЧИНАЕТСЯ ЗДЕСЬ</div><h2>Хорошие решения<br/>рождаются из <em>ясности.</em></h2><p>Начните записывать питание и посмотрите, как складывается ваш день.</p></div><Link className="button button-primary" to="/app">Открыть дневник <ArrowRight size={19}/></Link></div></section>
       </main>
-      <footer className="site-footer"><div className="container footer-top"><Brand compact/><p>Питание в вашем ритме.</p><a href="#top">Наверх ↑</a></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} VELLIUM · Сделано by ssskkkiiieee</span><Link to="/privacy">Политика конфиденциальности</Link><span>Примеры на странице иллюстративны.</span></div></footer>
+      <footer className="site-footer"><div className="container footer-top"><Brand compact/><p>Питание в вашем ритме.</p><a href="#top">Наверх ↑</a></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} VELLIUM · Сделано by ssskkkiiieee</span><Link to="/privacy">Политика конфиденциальности</Link><Link to="/terms">Пользовательское соглашение</Link><span>Примеры на странице иллюстративны.</span></div></footer>
     </div>
   );
 }

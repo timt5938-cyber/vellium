@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 import Landing from './Landing';
 import PrivacyPolicy from './PrivacyPolicy';
+import TermsOfService from './TermsOfService';
 
 const Dashboard = lazy(() => import('./Dashboard'));
 
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/app" element={<Suspense fallback={<div className="auth-screen"><p>Загружаем дневник…</p></div>}><Dashboard /></Suspense>} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
       </Routes>
     </BrowserRouter>
   );
