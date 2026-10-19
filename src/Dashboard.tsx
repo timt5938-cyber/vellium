@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BookOpenText, CalendarDays, Download, Lightbulb, LogOut, Plus, Settings2, Trash2, X } from 'lucide-react';
-import { ageOnDate, calculateTargets, mealLabels, nutritionForGrams, suggestMeal, totals } from './lib/nutrition';
-import type { Meal, MealType, Nutrition, Profile } from './lib/nutrition';
+import { ageOnDate, calculateTargets, mealLabels, suggestMeal, totals } from './lib/nutrition';
+import type { Profile } from './lib/nutrition';
 import AuthPanel from './components/AuthPanel';
+import AddMealDialog from './components/AddMealDialog';
 import { useCloudDiary } from './hooks/useCloudDiary';
 import { supabase } from './services/supabase';
 
 type Tab = 'today' | 'history' | 'profile';
-const emptyFood = { name: '', grams: '150', kcal: '', protein: '', fat: '', carbs: '', type: 'lunch' as MealType };
+const emptyProfile: Profile = { name: '', sex: 'female', birthDate: '', heightCm: 165, weightKg: 65, activity: 'light', goal: 'maintain' };
 
 function todayKey(date = new Date()) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -30,10 +31,8 @@ export default function Dashboard() {
   const [tab, setTab] = useState<Tab>('today');
   const [date, setDate] = useState(todayKey);
   const [showAdd, setShowAdd] = useState(false);
-  const [food, setFood] = useState(emptyFood);
-  const [profileDraft, setProfileDraft] = useState<Profile>({ name: '', sex: 'female', birthDate: '', heightCm: 165, weightKg: 65, activity: 'light', goal: 'maintain' });
+  const [profileDraft, setProfileDraft] = useState<Profile>(emptyProfile);
   const [profileError, setProfileError] = useState('');
-  const [foodError, setFoodError] = useState('');
 
   useEffect(() => { if (data.profile) setProfileDraft(data.profile); }, [data.profile]);
   const dayMeals = useMemo(() => data.meals.filter((m) => todayKey(new Date(m.eatenAt)) === date).sort((a,b) => b.eatenAt.localeCompare(a.eatenAt)), [data.meals, date]);
@@ -56,35 +55,18 @@ export default function Dashboard() {
     } catch (error) { setProfileError(error instanceof Error ? error.message : 'Не удалось сохранить профиль.'); }
   }
 
-  async function addMeal(event: React.FormEvent) {
-    event.preventDefault();
-    const grams = Number(food.grams);
-    const per100: Nutrition = { kcal: Number(food.kcal), protein: Number(food.protein), fat: Number(food.fat), carbs: Number(food.carbs) };
-    if (!food.name.trim() || !Number.isFinite(grams) || grams <= 0 || grams > 3000 ||
-      Object.values(per100).some((n) => !Number.isFinite(n) || n < 0 || n > 1000)) return setFoodError('Проверьте название, порцию и значения на 100 г.');
-    const macroKcal = per100.protein * 4 + per100.fat * 9 + per100.carbs * 4;
-    if (per100.protein + per100.fat + per100.carbs > 110 ||
-      (per100.kcal > 0 && Math.abs(per100.kcal - macroKcal) > Math.max(100, per100.kcal * .55))) return setFoodError('Калории и БЖУ сильно расходятся. Проверьте значения на 100 г.');
-    const meal: Meal = { id: crypto.randomUUID(), name: food.name.trim(), grams, type: food.type,
-      eatenAt: new Date(`${date}T${new Date().toTimeString().slice(0, 8)}`).toISOString(), ...nutritionForGrams(per100, grams) };
-    try {
-      await cloud.addMeal(meal);
-      setFood(emptyFood); setFoodError(''); setShowAdd(false); setTab('today');
-    } catch (error) { setFoodError(error instanceof Error ? error.message : 'Не удалось сохранить запись.'); }
-  }
-
   function exportData() {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ profiles: cloud.profiles, meals: cloud.allMeals }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `vellium-data-${todayKey()}.json`; a.click();
     URL.revokeObjectURL(url);
   }
 
   async function clearData() {
-    if (!window.confirm('Удалить профиль и все записи из облака? Восстановить их будет нельзя.')) return;
+    if (!window.confirm('Удалить все профили семьи и записи из облака? Восстановить их будет нельзя.')) return;
     try {
       await cloud.clearData();
-      setProfileDraft({ name: '', sex: 'female', birthDate: '', heightCm: 165, weightKg: 65, activity: 'light', goal: 'maintain' });
+      setProfileDraft(emptyProfile);
       setTab('profile');
     } catch (error) { cloud.setError(error instanceof Error ? error.message : 'Не удалось удалить данные.'); }
   }
@@ -97,6 +79,11 @@ export default function Dashboard() {
   return <div className="app-shell">
     <aside className="app-sidebar"><Link to="/" className="app-brand"><span className="app-brand-mark">V</span><span>VELLIUM<span className="brand-dot">.</span></span></Link><div className="side-caption">ВАШЕ ПРОСТРАНСТВО</div><nav aria-label="Навигация дневника"><button className={tab==='today'?'side-link selected':'side-link'} onClick={() => setTab('today')}><BookOpenText size={19}/> Сегодня</button><button className={tab==='history'?'side-link selected':'side-link'} onClick={() => setTab('history')}><CalendarDays size={19}/> История</button><button className={tab==='profile'?'side-link selected':'side-link'} onClick={() => setTab('profile')}><Settings2 size={19}/> Профиль и данные</button></nav><div className="sidebar-bottom"><span>Облачный дневник</span><p>Профиль и записи хранятся в Supabase, Франкфурт.</p><Link to="/"><ArrowLeft size={16}/> На сайт</Link></div></aside>
     <div className="app-main"><header className="app-topbar"><Link className="app-mobile-brand" to="/">VELLIUM<span>.</span></Link><span>ПИТАНИЕ В ВАШЕМ РИТМЕ</span><button className="app-signout" aria-label="Выйти" title="Выйти" onClick={() => void supabase?.auth.signOut()}><LogOut size={18}/></button><div className="app-profile-pill">{data.profile?.name?.slice(0,1).toUpperCase() || 'V'}</div></header><main className="app-content">{cloud.error && <p className="form-error" role="alert">{cloud.error}</p>}
+      <div className="family-switcher" aria-label="Профили семьи">
+        <span>ПРОФИЛИ СЕМЬИ</span>
+        {cloud.profiles.map(({ id, profile }) => <button key={id} className={cloud.profileId === id ? 'active' : ''} aria-pressed={cloud.profileId === id} onClick={() => cloud.selectProfile(id)}>{profile.name}</button>)}
+        <button className="family-add" onClick={() => { cloud.newProfile(); setProfileDraft(emptyProfile); setProfileError(''); setTab('profile'); }}><Plus size={14}/> Добавить взрослого</button>
+      </div>
       {!profileReady && tab !== 'profile' ? <div className="welcome-panel"><div className="section-kicker">ДОБРО ПОЖАЛОВАТЬ</div><h1>Начнём с вашего<br/><em>ориентира.</em></h1><p>Заполните профиль, чтобы увидеть дневной баланс. Профиль будет сохранён в вашем аккаунте VELLIUM.</p><button className="button button-primary" onClick={() => setTab('profile')}>Настроить профиль <ArrowRight size={18}/></button></div> : null}
 
       {tab === 'today' && profileReady && targets && <><div className="app-heading"><div><div className="section-kicker">ВАШ ДНЕВНИК</div><h1>{date===todayKey()?'Сегодня':displayDate}, {data.profile!.name}.</h1><p>Каждый приём пищи — часть общей картины.</p></div><button className="button button-primary" onClick={() => setShowAdd(true)}><Plus size={19}/> Добавить еду</button></div><div className="date-controls"><button aria-label="Предыдущий день" onClick={() => setDate(todayKey(new Date(new Date(`${date}T12:00:00`).getTime()-86400000)))}>←</button><span>{displayDate}</span><button aria-label="Следующий день" disabled={date>=todayKey()} onClick={() => setDate(todayKey(new Date(new Date(`${date}T12:00:00`).getTime()+86400000)))}>→</button><button className="date-today" onClick={() => setDate(todayKey())}>Сегодня</button></div>
@@ -108,7 +95,7 @@ export default function Dashboard() {
       {tab === 'profile' && <><div className="app-heading"><div><div className="section-kicker">ЛИЧНЫЕ НАСТРОЙКИ</div><h1>Ваш ориентир.</h1><p>Расчёт можно изменить в любой момент. Данные хранятся в вашем аккаунте VELLIUM.</p></div></div><div className="profile-layout"><form className="profile-form" onSubmit={saveProfile}><div className="form-grid"><label>Ваше имя<input required value={profileDraft.name} onChange={(e)=>setProfileDraft({...profileDraft,name:e.target.value})} placeholder="Как к вам обращаться"/></label><label>Дата рождения<input required type="date" max={todayKey()} value={profileDraft.birthDate} onChange={(e)=>setProfileDraft({...profileDraft,birthDate:e.target.value})}/></label><label>Пол для формулы<select value={profileDraft.sex} onChange={(e)=>setProfileDraft({...profileDraft,sex:e.target.value as Profile['sex']})}><option value="female">Женский</option><option value="male">Мужской</option></select></label><label>Рост, см<input required type="number" min="100" max="250" value={profileDraft.heightCm} onChange={(e)=>setProfileDraft({...profileDraft,heightCm:Number(e.target.value)})}/></label><label>Вес, кг<input required type="number" min="25" max="350" step="0.1" value={profileDraft.weightKg} onChange={(e)=>setProfileDraft({...profileDraft,weightKg:Number(e.target.value)})}/></label><label>Активность<select value={profileDraft.activity} onChange={(e)=>setProfileDraft({...profileDraft,activity:e.target.value as Profile['activity']})}><option value="sedentary">Малоподвижная</option><option value="light">Лёгкая</option><option value="moderate">Умеренная</option><option value="high">Высокая</option></select></label><label>Цель<select value={profileDraft.goal} onChange={(e)=>setProfileDraft({...profileDraft,goal:e.target.value as Profile['goal']})}><option value="maintain">Поддерживать вес</option><option value="lose">Плавно снижать вес</option><option value="gain">Набирать вес</option></select></label><label>Свой ориентир, ккал <small>необязательно</small><input type="number" min="1000" max="6000" value={profileDraft.manualTarget ?? ''} onChange={(e)=>setProfileDraft({...profileDraft,manualTarget:e.target.value?Number(e.target.value):undefined})} placeholder="Рассчитать автоматически"/></label></div><p className="form-help">Формула Миффлина — Сан Жеора даёт примерный ориентир для взрослых. При беременности, кормлении, заболеваниях и специальных пищевых потребностях используйте ориентир, согласованный со специалистом.</p>{profileError && <p className="form-error" role="alert">{profileError}</p>}<button className="button button-primary" type="submit">Сохранить профиль <ArrowRight size={18}/></button></form><aside className="data-panel"><span className="card-overline">КОНТРОЛЬ ДАННЫХ</span><h3>Всё в ваших руках.</h3><p>Профиль и записи сохраняются в Supabase (Франкфурт) и доступны после входа в аккаунт.</p><button onClick={exportData}><Download size={18}/> Скачать JSON</button><button className="danger-action" onClick={clearData}><Trash2 size={18}/> Удалить профиль и записи</button></aside></div></>}
     </main><nav className="bottom-nav" aria-label="Мобильная навигация"><button className={tab==='today'?'active':''} onClick={()=>setTab('today')}><BookOpenText size={21}/>Сегодня</button><button className={tab==='history'?'active':''} onClick={()=>setTab('history')}><CalendarDays size={21}/>История</button><button className={tab==='profile'?'active':''} onClick={()=>setTab('profile')}><Settings2 size={21}/>Профиль</button></nav></div>
 
-    {showAdd && <div className="modal-backdrop" onMouseDown={(e)=>{if(e.target===e.currentTarget)setShowAdd(false)}}><div className="meal-modal" role="dialog" aria-modal="true" aria-labelledby="add-title"><div className="modal-head"><div><span className="section-kicker">НОВАЯ ЗАПИСЬ</span><h2 id="add-title">Добавить еду</h2></div><button aria-label="Закрыть" onClick={()=>setShowAdd(false)}><X size={22}/></button></div><form onSubmit={addMeal}><label>Название блюда или продукта<input autoFocus required value={food.name} onChange={(e)=>setFood({...food,name:e.target.value})} placeholder="Например, гречка с курицей"/></label><div className="form-grid"><label>Приём пищи<select value={food.type} onChange={(e)=>setFood({...food,type:e.target.value as MealType})}>{Object.entries(mealLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><label>Порция, г<input type="number" required min="1" max="3000" value={food.grams} onChange={(e)=>setFood({...food,grams:e.target.value})}/></label></div><div className="form-divider">ПИЩЕВАЯ ЦЕННОСТЬ НА 100 Г</div><div className="form-grid"><label>Ккал<input type="number" required min="0" max="1000" step="0.1" value={food.kcal} onChange={(e)=>setFood({...food,kcal:e.target.value})}/></label><label>Белки, г<input type="number" required min="0" max="100" step="0.1" value={food.protein} onChange={(e)=>setFood({...food,protein:e.target.value})}/></label><label>Жиры, г<input type="number" required min="0" max="100" step="0.1" value={food.fat} onChange={(e)=>setFood({...food,fat:e.target.value})}/></label><label>Углеводы, г<input type="number" required min="0" max="100" step="0.1" value={food.carbs} onChange={(e)=>setFood({...food,carbs:e.target.value})}/></label></div><p className="form-help">Возьмите значения с этикетки или из проверенного источника. Мы пересчитаем их на размер порции.</p>{foodError && <p className="form-error" role="alert">{foodError}</p>}<button type="submit" className="button button-primary modal-submit">Сохранить запись <ArrowRight size={18}/></button></form></div></div>}
+    {showAdd && <AddMealDialog date={date} onClose={() => setShowAdd(false)} onSave={cloud.addMeal}/> }
   </div>;
 }
 

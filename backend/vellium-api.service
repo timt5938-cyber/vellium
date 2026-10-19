@@ -1,0 +1,22 @@
+[Unit]
+Description=VELLIUM nutrition recognition API
+After=network-online.target sing-box.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vellium
+Group=vellium
+WorkingDirectory=/opt/vellium-api
+EnvironmentFile=/opt/vellium-api/.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/vellium-api/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8300 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
