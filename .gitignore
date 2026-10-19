@@ -8,3 +8,6 @@ tmp/
 __pycache__/
 .pytest_cache/
 backend/.venv/
+backend/.server.env
+*.tsbuildinfo
+deploy/*.png

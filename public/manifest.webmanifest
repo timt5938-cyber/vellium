@@ -1,0 +1,16 @@
+{
+  "id": "/app",
+  "name": "VELLIUM — дневник питания",
+  "short_name": "VELLIUM",
+  "description": "Личный и семейный дневник питания",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#11100f",
+  "theme_color": "#11100f",
+  "lang": "ru",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "ingress": [
+    { "hostname": "ssskkkiiieee.bond", "path": "^/api(/.*)?$", "service": "http://127.0.0.1:8300" },
+    { "hostname": "ssskkkiiieee.bond", "service": "http://127.0.0.1:8310" },
+    { "hostname": "www.ssskkkiiieee.bond", "path": "^/api(/.*)?$", "service": "http://127.0.0.1:8300" },
+    { "hostname": "www.ssskkkiiieee.bond", "service": "http://127.0.0.1:8310" },
+    { "service": "http_status:404" }
+  ]
+}
