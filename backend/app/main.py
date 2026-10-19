@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from .recognition import HourlyLimiter, RecognitionResult, normalize_photo, recognize
 from .products import Product, lookup_product, normalize_barcode
+from .recommendation import Recommendation, RecommendationRequest, recommend
 
 app = FastAPI(title='VELLIUM API', docs_url=None, redoc_url=None)
 origins = [item.strip() for item in os.getenv('CORS_ORIGINS', 'http://127.0.0.1:5173').split(',') if item.strip()]
@@ -16,6 +17,7 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=['GET', 
                    allow_headers=['Authorization', 'Content-Type'])
 limiter = HourlyLimiter()
 product_limiter = HourlyLimiter(limit=30)
+recommendation_limiter = HourlyLimiter(limit=8)
 
 
 class TextRequest(BaseModel):
@@ -90,6 +92,18 @@ async def recognize_text(payload: TextRequest, user_id: str = Depends(verified_u
     if not result.items:
         raise HTTPException(status_code=422, detail='Не удалось разобрать описание. Введите блюдо вручную.')
     return result
+
+
+@app.post('/api/recommend', response_model=Recommendation)
+async def recommend_next(payload: RecommendationRequest, user_id: str = Depends(verified_user)):
+    if not recommendation_limiter.allow(user_id):
+        raise HTTPException(status_code=429, detail='Лимит подсказок: 8 запросов в час.')
+    try:
+        return await recommend(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (RuntimeError, ValidationError, genai_errors.APIError, httpx.TimeoutException) as exc:
+        raise HTTPException(status_code=503, detail='Подсказка временно недоступна.') from exc
 
 
 @app.post('/api/recognize/audio', response_model=RecognitionResult)
