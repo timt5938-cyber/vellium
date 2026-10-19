@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { apiUrl } from './apiUrl';
 
 export interface Product {
   barcode: string;
@@ -52,7 +53,7 @@ async function fetchProduct(code: string): Promise<Product> {
   if (!supabase) throw new Error('Supabase не настроен.');
   const { data } = await supabase.auth.getSession();
   if (!data.session?.access_token) throw new Error('Войдите в аккаунт.');
-  const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/products/${encodeURIComponent(code)}`, {
+  const response = await fetch(apiUrl(`/api/products/${encodeURIComponent(code)}`), {
     headers: { Authorization: `Bearer ${data.session.access_token}` },
   });
   const result = await response.json().catch(() => null);

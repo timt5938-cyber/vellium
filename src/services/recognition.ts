@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { apiUrl } from './apiUrl';
 
 export interface FoodEstimate {
   name: string;
@@ -50,7 +51,7 @@ async function callApi(path: string, body: BodyInit, contentType?: string): Prom
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30_000);
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL || ''}${path}`, {
+    const response = await fetch(apiUrl(path), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${data.session.access_token}`,
@@ -66,6 +67,9 @@ async function callApi(path: string, body: BodyInit, contentType?: string): Prom
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new Error('Распознавание заняло слишком много времени. Попробуйте ещё раз.');
+    }
+    if (error instanceof TypeError) {
+      throw new Error('Не удалось связаться с сервером VELLIUM. Проверьте подключение и попробуйте ещё раз.');
     }
     throw error;
   } finally {
