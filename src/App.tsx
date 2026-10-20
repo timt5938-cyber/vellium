@@ -4,6 +4,8 @@ import Landing from './Landing';
 import PrivacyPolicy from './PrivacyPolicy';
 import TermsOfService from './TermsOfService';
 import JoinFamily from './JoinFamily';
+import ProjectGateway from './ProjectGateway';
+import TGclear from './TGclear';
 
 const Dashboard = lazy(() => import('./Dashboard'));
 
@@ -24,7 +26,9 @@ export default function App() {
     <BrowserRouter>
       <ScrollToTop />
       <Routes>
-        <Route path="/" element={<Landing />} />
+        <Route path="/" element={<ProjectGateway />} />
+        <Route path="/vellium" element={<Landing />} />
+        <Route path="/tgclear" element={<TGclear />} />
         <Route path="/app" element={<Suspense fallback={<div className="auth-screen"><p>Загружаем дневник…</p></div>}><Dashboard /></Suspense>} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
