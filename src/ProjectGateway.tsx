@@ -1,11 +1,26 @@
-import { ArrowRight, HeartPulse, Send } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import { ArrowRight, CircleDot, Diamond, Dices, HeartPulse, Hexagon, Send, Sparkles, Star, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Brand from './components/Brand';
 import './project-pages.css';
 
+const motifs = [Star, CircleDot, Diamond, Sparkles, Hexagon, Dices, Zap];
+const particles = Array.from({ length: 17 }, (_, index) => ({
+  Icon: motifs[index % motifs.length],
+  style: {
+    '--x': `${(index * 31 + 9) % 97}%`,
+    '--delay': `${-(index * 5.3) % 32}s`,
+    '--duration': `${24 + (index * 7) % 17}s`,
+    '--size': `${18 + (index * 11) % 22}px`,
+  } as CSSProperties,
+}));
+
 export default function ProjectGateway() {
   return <main className="project-gateway">
-    <div className="project-gateway-image" aria-hidden="true"/>
+    <div className="project-gateway-image" aria-hidden="true">
+      <span className="project-orbit project-orbit-one"/><span className="project-orbit project-orbit-two"/>
+      {particles.map(({ Icon, style }, index) => <span className="project-particle" style={style} key={index}><Icon strokeWidth={1.5}/></span>)}
+    </div>
     <div className="project-gateway-shade" aria-hidden="true"/>
     <div className="project-gateway-content">
       <Brand/>
