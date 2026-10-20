@@ -8,6 +8,7 @@ import AddMealDialog from './components/AddMealDialog';
 import EditMealDialog from './components/EditMealDialog';
 import NextMealRecommendation from './components/NextMealRecommendation';
 import Brand from './components/Brand';
+import AnimatedLink from './components/AnimatedLink';
 import NutritionTrends from './components/NutritionTrends';
 import QuickMeals from './components/QuickMeals';
 import TargetExplanation from './components/TargetExplanation';
@@ -108,7 +109,7 @@ export default function Dashboard() {
 
   const profileReady = Boolean(data.profile && targets);
   return <div className="app-shell">
-    <aside className="app-sidebar"><Brand compact/><div className="side-caption">ВАШЕ ПРОСТРАНСТВО</div><nav aria-label="Навигация дневника"><button className={tab==='today'?'side-link selected':'side-link'} onClick={() => setTab('today')}><BookOpenText size={19}/> Сегодня</button><button className={tab==='history'?'side-link selected':'side-link'} onClick={() => setTab('history')}><CalendarDays size={19}/> История</button><button className={tab==='profile'?'side-link selected':'side-link'} onClick={() => setTab('profile')}><Settings2 size={19}/> Профиль и данные</button></nav><div className="sidebar-bottom"><span>Облачный дневник</span><p>Профиль и записи хранятся в Supabase, Франкфурт.</p><Link to="/"><ArrowLeft size={16}/> На сайт</Link></div></aside>
+    <aside className="app-sidebar"><Brand compact/><div className="side-caption">ВАШЕ ПРОСТРАНСТВО</div><nav aria-label="Навигация дневника"><button className={tab==='today'?'side-link selected':'side-link'} onClick={() => setTab('today')}><BookOpenText size={19}/> Сегодня</button><button className={tab==='history'?'side-link selected':'side-link'} onClick={() => setTab('history')}><CalendarDays size={19}/> История</button><button className={tab==='profile'?'side-link selected':'side-link'} onClick={() => setTab('profile')}><Settings2 size={19}/> Профиль и данные</button></nav><div className="sidebar-bottom"><span>Облачный дневник</span><p>Профиль и записи хранятся в Supabase, Франкфурт.</p><AnimatedLink to="/tgclear">Перейти в TGclear</AnimatedLink><AnimatedLink to="/"><ArrowLeft size={16}/> Все проекты</AnimatedLink></div></aside>
     <div className="app-main"><header className="app-topbar"><Link className="app-mobile-brand" to="/">VELLIUM<span>.</span></Link><span>ПИТАНИЕ В ВАШЕМ РИТМЕ</span><button className="app-signout" aria-label="Выйти" title="Выйти" onClick={() => void supabase?.auth.signOut()}><LogOut size={18}/></button><div className="app-profile-pill">{data.profile?.name?.slice(0,1).toUpperCase() || 'V'}</div></header><main className="app-content">{cloud.error && <p className="form-error" role="alert">{cloud.error}</p>}
       <div className="family-switcher" aria-label="Профили семьи">
         <span>ПРОФИЛИ СЕМЬИ</span>

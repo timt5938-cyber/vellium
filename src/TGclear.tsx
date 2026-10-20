@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { ArrowLeft, ArrowRight, Check, Download, ExternalLink, KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Brand from './components/Brand';
+import AnimatedLink from './components/AnimatedLink';
 import AuthPanel from './components/AuthPanel';
 import { supabase } from './services/supabase';
 import './project-pages.css';
@@ -35,12 +36,12 @@ export default function TGclear() {
 
   if (toolOpen && loading) return <div className="tg-loading">Подключаем TGclear…</div>;
   if (toolOpen && !session) return <AuthPanel redirectTo="/tgclear"/>;
-  if (toolOpen) return <div className="tg-tool-shell"><div className="tg-tool-bar"><button onClick={() => setToolOpen(false)} type="button"><ArrowLeft size={17}/> К описанию проекта</button><span>TGclear / РАБОЧЕЕ ПРОСТРАНСТВО</span></div><iframe ref={frame} title="TGclear — очистка Telegram" src="/tgclear/tool" onLoad={() => {
+  if (toolOpen) return <div className="tg-tool-shell"><div className="tg-tool-bar"><Brand compact/><nav aria-label="Проекты"><AnimatedLink to="/app">Дневник</AnimatedLink><AnimatedLink to="/">Все проекты</AnimatedLink><button onClick={() => setToolOpen(false)} type="button"><ArrowLeft size={17}/> О проекте</button></nav></div><iframe ref={frame} title="TGclear — очистка Telegram" src="/tgclear/tool" onLoad={() => {
     if (session?.access_token) frame.current?.contentWindow?.postMessage({ type: 'tgclear-session', token: session.access_token }, window.location.origin);
   }}/></div>;
 
   return <div className="tg-landing">
-    <header className="tg-topbar"><Brand/><Link to="/">Все проекты <ArrowRight size={17}/></Link></header>
+    <header className="tg-topbar"><Brand/><nav aria-label="Проекты"><AnimatedLink to="/app">Дневник</AnimatedLink><AnimatedLink to="/">Все проекты <ArrowRight size={17}/></AnimatedLink></nav></header>
     <main>
       <section className="tg-hero"><div className="tg-container tg-hero-grid"><div>
         <span className="project-kicker">02 / ПОРЯДОК В TELEGRAM</span>
@@ -48,7 +49,7 @@ export default function TGclear() {
         <p>Посмотрите, какие каналы вы давно не читали. Защитите важное, проверьте кандидатов и подтвердите выход только из выбранных чатов.</p>
         <label className="tg-consent"><input type="checkbox" checked={acceptedRemote} onChange={(event) => setAcceptedRemote(event.target.checked)}/><span>Я понимаю, что веб-версия передаёт данные Telegram на сервер для работы TGclear; я прочитал(а) <Link to="/privacy">раздел о TGclear в политике</Link>. Локальный запуск доступен ниже.</span></label>
         <div className="tg-actions"><button type="button" className="tg-primary" disabled={!acceptedRemote} onClick={() => setToolOpen(true)}>Открыть TGclear <ArrowRight size={18}/></button><a href={repo} target="_blank" rel="noopener noreferrer">Исходный код <ExternalLink size={16}/></a></div>
-        <p className="tg-hero-note"><ShieldCheck size={17}/> Личные диалоги и боты исключены из очистки. Перед выходом создаётся резервная копия.</p>
+        <p className="tg-hero-note"><ShieldCheck size={17}/> Личные чаты и боты видны в списке и удаляются только после отдельного подтверждения. Сообщения восстановить нельзя.</p>
       </div><div className="tg-visual" aria-label="Схематичный предварительный просмотр TGclear"><div className="tg-visual-top"><span className="tg-visual-brand">V&nbsp; TGclear</span><span>ОБЗОР</span></div><div className="tg-visual-title">Всё важное — на месте.</div><div className="tg-visual-metrics"><div><strong>42</strong><span>Канала найдено</span></div><div><strong>12</strong><span>Можно проверить</span></div></div><div className="tg-visual-row"><span className="tg-visual-dot"/>Новости проекта <small>Защищён</small></div><div className="tg-visual-row"><span className="tg-visual-dot amber"/>Старый канал <small>Кандидат</small></div><div className="tg-visual-row"><span className="tg-visual-dot"/>Семейная группа <small>Защищена</small></div></div></div></section>
 
       <section className="tg-section" id="how-to-connect"><div className="tg-container"><span className="project-kicker">ПЕРЕД ПЕРВЫМ ВХОДОМ</span><h2>Подключение за четыре шага.</h2><p className="tg-section-intro">Для работы TGclear нужны ваши ключи Telegram API. Получите их на официальном портале, затем войдите в интерфейсе TGclear.</p><div className="tg-steps">

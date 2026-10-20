@@ -6,6 +6,7 @@ import TermsOfService from './TermsOfService';
 import JoinFamily from './JoinFamily';
 import ProjectGateway from './ProjectGateway';
 import TGclear from './TGclear';
+import './route-transition.css';
 
 const Dashboard = lazy(() => import('./Dashboard'));
 
