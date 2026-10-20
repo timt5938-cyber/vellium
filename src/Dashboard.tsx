@@ -89,7 +89,7 @@ export default function Dashboard() {
     try {
       if (format === 'pdf') await exportPdf(cloud.profiles, cloud.allMeals);
       else await exportExcel(cloud.profiles, cloud.allMeals);
-    } catch (error) { cloud.setError(error instanceof Error ? error.message : 'Не удалось скачать дневник.'); }
+    } catch { cloud.setError('Не удалось подготовить файл. Обновите страницу и попробуйте ещё раз. Если ошибка повторится, напишите нам.'); }
     finally { setExporting(null); }
   }
 

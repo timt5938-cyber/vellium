@@ -6,6 +6,7 @@ import { recognizeAudio, recognizePhoto, recognizeText } from '../services/recog
 import type { RecognitionResult } from '../services/recognition';
 import { lookupProduct, scanBarcodes } from '../services/products';
 import type { Product } from '../services/products';
+import { trustedProductUrl } from '../utils/trustedProductUrl';
 
 type Mode = 'manual' | 'photo' | 'text' | 'voice' | 'scan' | 'review' | 'plate-review';
 type FoodDraft = { name: string; grams: string; kcal: string; protein: string; fat: string; carbs: string; type: MealType };
@@ -295,7 +296,7 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
 
       {mode === 'plate-review' && <form onSubmit={savePlate} className="plate-review">
         <div className="recognition-review"><strong>Проверьте состав тарелки и порции</strong><p>По одному снимку вес определяется приблизительно. Исправьте значения или уберите лишнее.</p>{estimate?.note && <small>{estimate.note}</small>}</div>
-        {catalogProducts.length > 0 && <div className="catalog-sources"><strong>Источники данных с упаковок</strong>{catalogProducts.map((product) => <a key={product.barcode} href={product.source_url} target="_blank" rel="noreferrer">{product.name} ↗</a>)}</div>}
+        {catalogProducts.length > 0 && <div className="catalog-sources"><strong>Источники данных с упаковок</strong>{catalogProducts.map((product) => { const url = trustedProductUrl(product.source_url); return url ? <a key={product.barcode} href={url} rel="noreferrer">{product.name} ↗</a> : null; })}</div>}
         <label>Уточните описание и повторите распознавание<textarea value={description} maxLength={500} onChange={(event) => setDescription(event.target.value)} placeholder="Допишите ингредиенты, способ приготовления и порцию"/></label>
         <button className="scan-only-button" type="button" disabled={busy} onClick={() => void runCombinedRecognition()}>Распознать ещё раз с уточнением</button>
         <label>Приём пищи<select value={food.type} onChange={(event) => { const type = event.target.value as MealType; setFood({ ...food, type }); setPlateItems((items) => items.map((item) => ({ ...item, type }))); }}>{Object.entries(mealLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
@@ -322,7 +323,7 @@ export default function AddMealDialog({ date, onClose, onSave, onSaveMany }: {
       </form>}
 
       {(mode === 'manual' || mode === 'review') && <form onSubmit={save}>
-        {mode === 'review' && <div className="recognition-review"><strong>{catalogProduct ? 'Данные Open Food Facts проверьте по этикетке. Укажите свою порцию.' : 'Расчёт по фото, тексту или голосу приблизительный. Проверь размер порции.'}</strong>{estimate && <p>{estimate.items.map((item) => `${item.name}: около ${round(item.grams)} г`).join(' · ')}</p>}{estimate?.note && <small>{estimate.note}</small>}{catalogProduct && <a href={catalogProduct.source_url} target="_blank" rel="noreferrer">Источник: Open Food Facts ↗</a>}</div>}
+        {mode === 'review' && <div className="recognition-review"><strong>{catalogProduct ? 'Данные Open Food Facts проверьте по этикетке. Укажите свою порцию.' : 'Расчёт по фото, тексту или голосу приблизительный. Проверь размер порции.'}</strong>{estimate && <p>{estimate.items.map((item) => `${item.name}: около ${round(item.grams)} г`).join(' · ')}</p>}{estimate?.note && <small>{estimate.note}</small>}{catalogProduct && trustedProductUrl(catalogProduct.source_url) && <a href={trustedProductUrl(catalogProduct.source_url)} rel="noreferrer">Источник: Open Food Facts ↗</a>}</div>}
         <label>Название блюда или продукта<input autoFocus required maxLength={160} value={food.name} onChange={(event) => setFood({ ...food, name: event.target.value })} placeholder="Например, гречка с курицей"/></label>
         <div className="form-grid">
           <label>Приём пищи<select value={food.type} onChange={(event) => setFood({ ...food, type: event.target.value as MealType })}>{Object.entries(mealLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>

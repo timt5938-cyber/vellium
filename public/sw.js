@@ -1,4 +1,4 @@
-const CACHE = 'vellium-shell-v1';
+const CACHE = 'vellium-shell-v2';
 const SHELL = ['/', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

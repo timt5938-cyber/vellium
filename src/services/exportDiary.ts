@@ -13,12 +13,14 @@ function download(data: Blob, name: string) {
 
 function safeName(value: string) { return value.replace(/[\\/:*?"<>|]/g, '_').slice(0, 80); }
 function dateText(value: string) { return new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+function localDateKey() { const now = new Date(); return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10); }
 function activeMeals(profile: ExportProfile, meals: ExportMeal[]) { return meals.filter((meal) => meal.profileId === profile.id).sort((a, b) => a.eatenAt.localeCompare(b.eatenAt)); }
 
 export async function exportPdf(profiles: ExportProfile[], meals: ExportMeal[]) {
   const [pdfmakeModule, fontsModule] = await Promise.all([import('pdfmake/build/pdfmake'), import('pdfmake/build/vfs_fonts')]);
   const pdfmake = pdfmakeModule.default;
-  const fonts = fontsModule.vfs;
+  const fonts = fontsModule.default as unknown as Record<string, string>;
+  if (!fonts['Roboto-Medium.ttf']) throw new Error('Не удалось загрузить шрифты отчёта.');
   const content: unknown[] = [
     { text: 'VELLIUM.', style: 'brand' },
     { text: 'Дневник питания', style: 'title' },
@@ -55,7 +57,7 @@ export async function exportPdf(profiles: ExportProfile[], meals: ExportMeal[]) 
     footer: (page: number, count: number) => ({ text: `VELLIUM · ${page} / ${count}`, alignment: 'right' as const, color: '#8f7968', fontSize: 8, margin: [0, 0, 36, 0] as [number, number, number, number] }),
   };
   const pdf = pdfmake.createPdf(documentDefinition as Parameters<typeof pdfmake.createPdf>[0], undefined, undefined, fonts);
-  pdf.download(`vellium-diary-${new Date().toISOString().slice(0, 10)}.pdf`);
+  pdf.download(`vellium-diary-${localDateKey()}.pdf`);
 }
 
 export async function exportExcel(profiles: ExportProfile[], meals: ExportMeal[]) {
@@ -82,5 +84,5 @@ export async function exportExcel(profiles: ExportProfile[], meals: ExportMeal[]
     sheet.eachRow((row, index) => { if (index === 1) return; row.height = 24; row.eachCell((cell) => { cell.alignment = { vertical: 'middle', wrapText: true }; if (index % 2 === 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7F1EB' } }; }); });
   }
   const buffer = await workbook.xlsx.writeBuffer();
-  download(new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `vellium-diary-${safeName(new Date().toISOString().slice(0, 10))}.xlsx`);
+  download(new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `vellium-diary-${safeName(localDateKey())}.xlsx`);
 }
